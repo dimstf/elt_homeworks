@@ -1,0 +1,19 @@
+Date: 02.06.2023
+Compiler: gcc-12
+Distr: Ubuntu 22.04 LTS
+
+Commands:
+
+gcc-12 -E main.c -o main.i
+Source -> Preprocessed
+
+gcc-12 -S main.i
+OR
+gcc-12 -S main.i -o main.s
+Preprocessed -> Assembler
+
+gcc-12 -c main.s
+Assembler -> Objective
+
+gcc-12 main.o -o main
+Objective -> Executable
