@@ -1,0 +1,5 @@
+Date: 09.06.2023
+Homework: switch
+
+Commands:
+gcc-12 -S main.c
