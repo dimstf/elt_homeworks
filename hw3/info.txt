@@ -1,0 +1,4 @@
+Date: 13.06.2023
+
+Commands:
+gcc-12 main.c -o main
