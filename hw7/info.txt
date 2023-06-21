@@ -1,0 +1,18 @@
+Homework 7
+Date: 21.06.2023
+
+Commands:
+
+Compile:
+gcc-12 test.c -fno-stack-protector -no-pie -g -o test
+
+start gdb:
+gdb test
+
+gdb commands:
+
+break 30
+run
+nexti (8 times)
+set $eax=1
+continue
