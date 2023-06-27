@@ -1,0 +1,18 @@
+Date: 27.06.2023
+
+File main.c
+Include some progs errors with dynamic memory.
+
+Commands:
+valgrind minimal:
+valgrind ./main
+
+valgrind for more info:
+valgrind -s -leak-check=full ./main
+
+valgrind and gdb:
+valgrind:
+valgrind --vgdb-error=1 --vgdb=yes ./main
+
+gdb:
+target remote | vgdb
