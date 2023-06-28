@@ -1,0 +1,7 @@
+Date: 28.06.2023
+
+Commands:
+gcc calc.c -c
+gcc interface.c -c
+ar rc libcalc.a calc.o interface.o
+gcc main.c -o main -L. -lcalc
