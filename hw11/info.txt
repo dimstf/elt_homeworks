@@ -1,0 +1,10 @@
+Date: 29.06.2023
+
+Commands:
+gcc calc.c -fPIC -c
+gcc interface.c -fPIC -c
+gcc -shared calc.o interface.o -o libcalc.so
+gcc main.c -o main -L. libcalc.so
+LD_LIBRARY_PATH=$PWD ./main
+
+LD_LIBRARY_PATH=$PWD/src ./src/main
