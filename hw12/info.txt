@@ -1,0 +1,14 @@
+Date: 29.06.2023
+
+Commands:
+gcc add.c -c -fPIC
+gcc sub.c -c -fPIC
+gcc mul.c -c -fPIC
+gcc div.c -c -fPIC
+
+gcc -shared add.o -o libadd.so
+gcc -shared sub.o -o libsub.so
+gcc -shared mul.o -o libmul.so
+gcc -shared div.o -o libdiv.so
+
+gcc main.c interface.c -o main -ldl
