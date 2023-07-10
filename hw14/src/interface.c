@@ -18,6 +18,15 @@ void sig_winch(int signo)
 	resizeterm(size.ws_row, size.ws_col);
 }
 
+int isDirectory(const char *path) 
+{
+	struct stat statbuf;
+	if (stat(path, &statbuf) != 0)
+		return 0;
+	
+	return S_ISDIR(statbuf.st_mode);
+}
+
 void run_interface()
 {
 	DIR *dir[2];
@@ -117,9 +126,13 @@ void run_interface()
 			case '\n':
 			{
 				struct stat st;
-				if(stat(list_files[curr_panel][sel_pos[curr_panel]],&st)==0)
+				char test_dir[PATH_MAX];
+				strcpy(test_dir,curr_dir[curr_panel]);
+				strcat(test_dir,"/");
+				strcat(test_dir,list_files[curr_panel][sel_pos[curr_panel]]);
+				if(stat(test_dir,&st)==0)
 				{
-					if((st.st_mode & S_IFDIR))
+					if(isDirectory(test_dir))
 					{
 						strcat(curr_dir[curr_panel],"/");
 						strcat(curr_dir[curr_panel],list_files[curr_panel][sel_pos[curr_panel]]);
@@ -171,10 +184,13 @@ void run_interface()
 							continue;
 						}
 						list_end[curr_panel]=0;
+						int f=0;
 						while((entry[curr_panel] = readdir(dir[curr_panel]))!= NULL)
 						{
+							strcpy(list_files[curr_panel][f],entry[curr_panel]->d_name);
 							wprintw(wnd[curr_panel], "  %s\n", entry[curr_panel]->d_name);
 							list_end[curr_panel]++;
+							f++;
 						}
 						wrefresh(wnd[curr_panel]);
 						mvwaddch(wnd[curr_panel], sel_pos[curr_panel], x_w, '*');
