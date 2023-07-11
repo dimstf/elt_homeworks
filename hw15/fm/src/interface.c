@@ -1,0 +1,264 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <unistd.h>  //Для getwd
+#include <limits.h>
+#include <termios.h>
+#include <sys/ioctl.h>
+#include <signal.h>
+#include <curses.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+
+void sig_winch(int signo)
+{
+	struct winsize size;
+	ioctl(fileno(stdout), TIOCGWINSZ, (char *) &size);
+	resizeterm(size.ws_row, size.ws_col);
+}
+
+int isDirectory(const char *path) 
+{
+	struct stat statbuf;
+	if (stat(path, &statbuf) != 0)
+		return 0;
+	
+	return S_ISDIR(statbuf.st_mode);
+}
+
+void run_interface()
+{
+	DIR *dir[2];
+    struct dirent *entry[2];
+	char curr_dir[2][PATH_MAX];
+	getcwd(curr_dir[0], PATH_MAX);
+	getcwd(curr_dir[1], PATH_MAX);
+	//strcat(curr_dir,"/123");
+	//printf("Current directory: %s\n", curr_dir);
+    dir[0] = opendir(curr_dir[0]);
+	if(!dir[0]) 
+        exit(1);
+	dir[1] = opendir(curr_dir[1]);
+	if(!dir[1]) 
+        exit(1);
+	
+	WINDOW * wnd[3];
+	initscr();
+	curs_set(FALSE);
+	start_color();
+	refresh();
+	init_pair(1, COLOR_YELLOW, COLOR_BLUE);
+	wnd[0] = newwin(40, 60, 1, 1);
+	wnd[1] = newwin(40, 60, 1, 62);
+	wnd[2] = newwin(3, 121, 42, 1);
+	wbkgd(wnd[0], COLOR_PAIR(1));
+	wbkgd(wnd[1], COLOR_PAIR(1));
+	wbkgd(wnd[2], COLOR_PAIR(1));
+	wattron(wnd[0], A_BOLD);
+	wattron(wnd[1], A_BOLD);
+	wattron(wnd[2], A_BOLD);
+	signal(SIGWINCH, sig_winch);
+	int list_end[2]={0,0};
+	char list_files[2][128][PATH_MAX];
+	int i=0;
+	while((entry[0] = readdir(dir[0]))!= NULL)
+	{
+		strcpy(list_files[0][i],entry[0]->d_name);
+		wprintw(wnd[0], "  %s\n", entry[0]->d_name);
+		list_end[0]++;
+		i++;
+	}
+	i=0;
+	while((entry[1] = readdir(dir[1]))!= NULL)
+	{
+		strcpy(list_files[1][i],entry[1]->d_name);
+		wprintw(wnd[1], "  %s\n", entry[1]->d_name);
+		list_end[1]++;
+		i++;
+	}
+	wrefresh(wnd[0]);
+	wrefresh(wnd[1]);
+	wrefresh(wnd[2]);
+
+	keypad(stdscr, TRUE);
+	int pres_key=0;
+	int curr_panel=0;	// press tab for change
+	int sel_pos[2]={0,0};
+	int x_w=0;
+	mvwaddch(wnd[0], sel_pos[0], x_w, '*');
+	//mvwaddch(wnd[1], sel_pos, x_w, '*');	// cursor on second panel
+	wrefresh(wnd[0]);
+	wrefresh(wnd[1]);
+	while(1)
+	{
+		pres_key=getch();
+		
+		switch(pres_key)
+		{
+			case KEY_F(10):
+			{
+				delwin(wnd[0]);
+				delwin(wnd[1]);
+				delwin(wnd[2]);
+				refresh();
+				curs_set(TRUE);
+				endwin();
+				closedir(dir[0]);
+				closedir(dir[1]);
+				exit(0);
+			} break;
+			case KEY_UP:
+			{
+				if(sel_pos[curr_panel]>0)
+				{
+					mvwaddch(wnd[curr_panel], sel_pos[curr_panel], x_w, ' ');
+					sel_pos[curr_panel]-=1;
+				}
+				mvwaddch(wnd[curr_panel], sel_pos[curr_panel], x_w, '*');
+				wrefresh(wnd[curr_panel]);
+			} break;
+			case KEY_DOWN:
+			{		
+				if(sel_pos[curr_panel]<list_end[curr_panel]-1)
+				{
+					mvwaddch(wnd[curr_panel], sel_pos[curr_panel], x_w, ' ');
+					sel_pos[curr_panel]+=1;
+				}
+				mvwaddch(wnd[curr_panel], sel_pos[curr_panel], x_w, '*');
+				wrefresh(wnd[curr_panel]);
+			} break;
+			case '\n':
+			{
+				struct stat st;
+				char test_dir[PATH_MAX];
+				strcpy(test_dir,curr_dir[curr_panel]);
+				strcat(test_dir,"/");
+				strcat(test_dir,list_files[curr_panel][sel_pos[curr_panel]]);
+				if(stat(test_dir,&st)==0)
+				{
+					if(isDirectory(test_dir))
+					{
+						strcat(curr_dir[curr_panel],"/");
+						strcat(curr_dir[curr_panel],list_files[curr_panel][sel_pos[curr_panel]]);
+						wclear(wnd[curr_panel]);
+						dir[curr_panel] = opendir(curr_dir[curr_panel]);
+						if(!dir[curr_panel])
+						{
+							delwin(wnd[0]);
+							delwin(wnd[1]);
+							refresh();
+							curs_set(TRUE);
+							endwin();
+							closedir(dir[0]);
+							closedir(dir[1]);
+							exit(1);
+						}		
+						sel_pos[curr_panel]=0;
+						// "folders" /. OR /..
+						char *p=strstr(curr_dir[curr_panel],"/..");
+						if(p!=NULL)
+						{
+							int k=strlen(curr_dir[curr_panel])-1;
+							int bck=2;
+							while(bck>0)
+							{
+								curr_dir[curr_panel][k]='\0';
+								k--;
+								if(k==0)
+									break;
+								if(curr_dir[curr_panel][k]=='/')
+									bck--;
+							}
+							if(k!=0)
+								curr_dir[curr_panel][k]='\0';
+						}
+						char *t=strstr(curr_dir[curr_panel],"/.");
+						if(t!=NULL)
+						{
+							int l=strlen(curr_dir[curr_panel])-1;
+							while(curr_dir[curr_panel][l]!='/')
+							{
+								curr_dir[curr_panel][l]='\0';
+								l--;
+								if(l==0)
+									break;
+							}
+							if(l!=0)
+								curr_dir[curr_panel][l]='\0';
+							continue;
+						}
+						list_end[curr_panel]=0;
+						int f=0;
+						while((entry[curr_panel] = readdir(dir[curr_panel]))!= NULL)
+						{
+							strcpy(list_files[curr_panel][f],entry[curr_panel]->d_name);
+							wprintw(wnd[curr_panel], "  %s\n", entry[curr_panel]->d_name);
+							list_end[curr_panel]++;
+							f++;
+						}
+						wrefresh(wnd[curr_panel]);
+						mvwaddch(wnd[curr_panel], sel_pos[curr_panel], x_w, '*');
+					}
+				} else {
+					//wclear(wnd[curr_panel]);
+					//wprintw(wnd[curr_panel], "Cannot open directory");
+					wrefresh(wnd[curr_panel]);
+				}
+			} break;
+			case '\t':
+			{
+				if(sel_pos[curr_panel]>=0)
+					mvwaddch(wnd[curr_panel], sel_pos[curr_panel], x_w, ' ');
+				sel_pos[curr_panel]=0;
+				switch(curr_panel)
+				{
+					case 0:
+					{
+						curr_panel=1;
+					} break;
+					case 1:
+					{
+						curr_panel=2;
+						curs_set(TRUE);
+						wclear(wnd[curr_panel]);
+						char command[40]=" ";
+						wprintw(wnd[2], "Input command:\n");
+						wgetnstr(wnd[2], command, 40);
+						wrefresh(wnd[2]);
+						char cmd[40]=" ";
+						strcpy(cmd,command);
+	
+						char *istr;
+						istr = strtok(command," ");
+
+						char *chp=strtok(cmd," ");
+						pid_t pid;
+						pid=fork();
+						if(pid==0)
+						{
+							execlp(istr,chp,NULL);
+							exit(0);
+						}
+						int st;
+						wait(&st);
+					} break;
+					case 2:
+					{
+						curr_panel=0;
+						curs_set(FALSE);
+					} break;
+					default:
+					{} break;
+				}
+				mvwaddch(wnd[curr_panel], sel_pos[curr_panel], x_w, '*');
+				wrefresh(wnd[0]);
+				wrefresh(wnd[1]);
+			} break;
+			
+			default:
+			{} break;
+		}
+	}
+}
