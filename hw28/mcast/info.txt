@@ -1,0 +1,6 @@
+Commands:
+Send:
+./sender 224.0.0.0 7777 hello! 64
+
+Recv:
+./recv 224.0.0.0 7777
