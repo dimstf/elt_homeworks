@@ -9,6 +9,8 @@
 #include <arpa/inet.h>
 
 #define PCKT_LEN 8192
+#define SERV_PORT 3475
+#define SERV_PORT2 3476
 
 void print_error(char *error_msg,int exit_status)
 {
@@ -26,12 +28,12 @@ unsigned short csum(unsigned short *buf, int nwords)
     return (unsigned short)(~sum);
 }
 
-int main(int argc, char const *argv[])
+int main(int argc,char const *argv[])
 {
-    if (argc != 5) 
+    if (argc!=4) 
     {
 	printf("Error: Invalid parameters!\n");
-	printf("Usage: %s <source hostname/IP> <source port> <target hostname/IP> <target port>\n", argv[0]);
+	printf("Usage: %s <source hostname/IP> <source port> <target hostname/IP>\n", argv[0]);
 	exit(1);
     }
 
@@ -40,7 +42,7 @@ int main(int argc, char const *argv[])
     src_addr=inet_addr(argv[1]);
     dst_addr=inet_addr(argv[3]);
     src_port=atoi(argv[2]);
-    dst_port=atoi(argv[4]);
+    //dst_port=atoi(argv[4]);
 
     int sd;
     char buffer[PCKT_LEN];
@@ -67,7 +69,7 @@ int main(int argc, char const *argv[])
     ip->ihl=5;
     ip->version=4;
     ip->tos=16;
-    ip->tot_len=sizeof(struct iphdr)+sizeof(struct udphdr);
+    ip->tot_len=htons(sizeof(struct iphdr)+sizeof(struct udphdr)+6);
     ip->id=htons(54321);
     ip->ttl=64;
     ip->protocol=IPPROTO_UDP;
@@ -75,16 +77,44 @@ int main(int argc, char const *argv[])
     ip->daddr=dst_addr;
 
     udp->source=htons(src_port);
-    udp->dest=htons(dst_port);
-    udp->len=htons(sizeof(struct udphdr));
+    udp->dest=htons(SERV_PORT);
+    int len=sizeof(struct iphdr)+sizeof(struct udphdr)+6;
+    udp->len=htons(sizeof(struct udphdr)+6);
+    
+    buffer[len-6]='h';
+    buffer[len-5]='e';
+    buffer[len-4]='l';
+    buffer[len-3]='l';
+    buffer[len-2]='o';
+    buffer[len-1]='\0';
 
-    ip->check=csum((unsigned short *)buffer,sizeof(struct iphdr)+sizeof(struct udphdr));
-
-    if(sendto(sd,buffer,ip->tot_len,0,(struct sockaddr *)&sin,sizeof(sin))<0)
+    ip->check=csum((unsigned short *)buffer,sizeof(struct iphdr)+sizeof(struct udphdr)+6);
+    // Отправка сообщения
+    if(sendto(sd,buffer,sizeof(struct iphdr)+sizeof(struct udphdr)+6,0,(struct sockaddr *)&sin,sizeof(sin))<0)
 	print_error("Sendto error. Exit.",1);
-
     close(sd);
-    printf("Finish.\n");
+    
+    // Приём сообщения от эхо сервера
+    char buf[100];
+    struct sockaddr_in servaddr,cliaddr;
+    bzero(&servaddr,sizeof(servaddr));
+
+    int sock1=socket(AF_INET,SOCK_DGRAM,0);        
+    if(sock1<0)
+    	print_error("Socket error. Exit.",1);
+    servaddr.sin_addr.s_addr=htonl(INADDR_ANY);
+    servaddr.sin_port=htons(SERV_PORT2);
+    servaddr.sin_family=AF_INET; 
+
+    if(bind(sock1,(struct sockaddr*)&servaddr,sizeof(servaddr))<0)
+	print_error("Bind error. Exit.",1);
+    int length=sizeof(servaddr);
+
+    int ln=sizeof(cliaddr);
+    int n=recvfrom(sock1,buf,sizeof(buf),0,(struct sockaddr*)&cliaddr,&ln);
+    buf[n]='\0';
+    printf("Recv: %s\n",buf);
+    close(sock1);
     
     return 0;
 }

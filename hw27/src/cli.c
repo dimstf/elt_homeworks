@@ -20,6 +20,8 @@
 #define MY_DEST_MAC5 0x00
 
 #define DEFAULT_IF "enp5s0"
+#define SERV_PORT 3613
+#define SERV_PORT2 3614
 
 void print_error(char *error_msg,int exit_status)
 {
@@ -59,7 +61,7 @@ int main(int argc, char *argv[])
     else
         strcpy(ifName,DEFAULT_IF);
 
-    if((sock=socket(AF_PACKET,SOCK_RAW,IPPROTO_RAW))==-1)
+    if((sock=socket(AF_PACKET,SOCK_RAW,htons(ETH_P_ALL)))==-1)
         print_error("Socket error. Exit.",1);
 
     memset(&if_idx,0,sizeof(struct ifreq));
@@ -77,28 +79,40 @@ int main(int argc, char *argv[])
     if(ioctl(sock,SIOCGIFADDR,&ifreq_ip)<0)
 	print_error("Ioctl 3 error. Exit.",1);
 
-    eh->ether_shost[0]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[0];
+    /*eh->ether_shost[0]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[0];
     eh->ether_shost[1]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[1];
     eh->ether_shost[2]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[2];
     eh->ether_shost[3]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[3];
     eh->ether_shost[4]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[4];
-    eh->ether_shost[5]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[5];
+    eh->ether_shost[5]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[5];*/
+    eh->ether_shost[0]=MY_DEST_MAC0;
+    eh->ether_shost[1]=MY_DEST_MAC1;
+    eh->ether_shost[2]=MY_DEST_MAC2;
+    eh->ether_shost[3]=MY_DEST_MAC3;
+    eh->ether_shost[4]=MY_DEST_MAC4;
+    eh->ether_shost[5]=MY_DEST_MAC5;
     eh->ether_dhost[0]=MY_DEST_MAC0;
     eh->ether_dhost[1]=MY_DEST_MAC1;
     eh->ether_dhost[2]=MY_DEST_MAC2;
     eh->ether_dhost[3]=MY_DEST_MAC3;
     eh->ether_dhost[4]=MY_DEST_MAC4;
     eh->ether_dhost[5]=MY_DEST_MAC5;
-    eh->ether_type=8;
+    /*eh->ether_dhost[0]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[0];
+    eh->ether_dhost[1]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[1];
+    eh->ether_dhost[2]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[2];
+    eh->ether_dhost[3]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[3];
+    eh->ether_dhost[4]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[4];
+    eh->ether_dhost[5]=((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[5];*/
+    eh->ether_type=htons(ETH_P_IP);
     len+=sizeof(struct ether_header);
 
     iph->ihl=5;
     iph->version=4;
     iph->tos=0;
-    iph->tot_len=sizeof(struct iphdr)+sizeof(struct udphdr);
-    iph->id=htonl(54321);
+    iph->tot_len=htons(sizeof(struct iphdr)+sizeof(struct udphdr)+6);
+    iph->id=htons(54321);
     iph->frag_off=0;
-    iph->ttl=255;
+    iph->ttl=64;
     iph->protocol=IPPROTO_UDP;
     iph->check=0;
     //iph->saddr=inet_addr(inet_ntoa((((struct sockaddr_in*)&(ifreq_ip.ifr_addr))->sin_addr)));    
@@ -108,18 +122,19 @@ int main(int argc, char *argv[])
     iph->check=csum((unsigned short *)buf,iph->tot_len);
     len+=sizeof(struct iphdr);
 
-    uph->source=htons(80);
-    uph->dest=htons(43521);
+    uph->source=htons(7777);
+    uph->dest=htons(SERV_PORT);
     uph->check=0;
 
     len+=sizeof(struct udphdr);
-    buf[len++]='H';
+    buf[len++]='h';
     buf[len++]='e';
     buf[len++]='l';
     buf[len++]='l';
     buf[len++]='o';
-    buf[len++]='!';
+    buf[len++]='\0';
     uph->len=htons((len-sizeof(struct iphdr)-sizeof(struct ethhdr)));
+    //uph->len=htons(sizeof(struct udphdr)+6);
 
     addr.sll_ifindex=if_idx.ifr_ifindex;
     addr.sll_halen=ETH_ALEN;
@@ -131,9 +146,32 @@ int main(int argc, char *argv[])
     addr.sll_addr[5]=MY_DEST_MAC5;
 	
     int len_ll=sizeof(struct sockaddr_ll);
+    // Отправка сообщения
     if(sendto(sock,buf,len,0,(struct sockaddr*)&addr,len_ll)<0)
 	print_error("Send error. Exit.",1);
     close(sock);
+    
+    // Приём сообщения от эхо сервера
+    char msg[100];
+    struct sockaddr_in servaddr,cliaddr;
+    bzero(&servaddr,sizeof(servaddr));
+
+    int sock1=socket(AF_INET,SOCK_DGRAM,0);        
+    if(sock1<0)
+    	print_error("Socket error. Exit.",1);
+    servaddr.sin_addr.s_addr=htonl(INADDR_ANY);
+    servaddr.sin_port=htons(SERV_PORT2);
+    servaddr.sin_family=AF_INET; 
+
+    if(bind(sock1,(struct sockaddr*)&servaddr,sizeof(servaddr))<0)
+	print_error("Bind error. Exit.",1);
+    int length=sizeof(servaddr);
+
+    int ln=sizeof(cliaddr);
+    int n=recvfrom(sock1,msg,sizeof(msg),0,(struct sockaddr*)&cliaddr,&ln);
+    msg[n]='\0';
+    printf("Recv: %s\n",msg);
+    close(sock1);
 	
     return 0;
 }

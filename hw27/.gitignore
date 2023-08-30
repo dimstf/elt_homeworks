@@ -1,2 +1,4 @@
-bin/main
-src/main
+bin/cli
+bin/echoserv
+src/cli
+src/echoserv
