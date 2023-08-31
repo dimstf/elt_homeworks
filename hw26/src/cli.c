@@ -92,6 +92,7 @@ int main(int argc,char const *argv[])
     // Отправка сообщения
     if(sendto(sd,buffer,sizeof(struct iphdr)+sizeof(struct udphdr)+6,0,(struct sockaddr *)&sin,sizeof(sin))<0)
 	print_error("Sendto error. Exit.",1);
+    printf("Send: hello\n");
     close(sd);
     
     // Приём сообщения от эхо сервера

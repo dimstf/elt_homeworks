@@ -6,9 +6,23 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <netinet/in.h>
+#include <net/if.h>
+#include <netinet/ether.h>
+#include <sys/ioctl.h>
+#include <linux/if_packet.h>
+#include <linux/ip.h>
+#include <linux/udp.h>
 
-#define SERV_PORT 3510
-#define SERV_PORT2 3511
+#define SERV_PORT2 3610
+#define DEST_MAC0	0x00
+#define DEST_MAC1	0x00
+#define DEST_MAC2	0x00
+#define DEST_MAC3	0x00
+#define DEST_MAC4	0x00
+#define DEST_MAC5	0x00
+#define ETHER_TYPE	0x0800
+#define DEFAULT_IF	"enp5s0"
+#define BUF_SIZ		1024
 
 void print_error(char *error_msg,int exit_status)
 {
@@ -16,32 +30,48 @@ void print_error(char *error_msg,int exit_status)
 	exit(exit_status);
 }
 
-int main()
+int main(int argc, char *argv[])
 {   
+    int sockfd,sockopt;
+    ssize_t numbytes;
+    struct ifreq ifopts;
+    struct ifreq if_ip;
+    struct sockaddr_storage their_addr;
+    uint8_t buf[BUF_SIZ];
+    char ifName[IFNAMSIZ];
+
+    if(argc>1)
+	strcpy(ifName,argv[1]);
+    else
+	strcpy(ifName,DEFAULT_IF);
+
+    struct ether_header *eh=(struct ether_header*)buf;
+    struct iphdr *iph=(struct iphdr*)(buf+sizeof(struct ether_header));
+    struct udphdr *udph=(struct udphdr*)(buf+sizeof(struct iphdr)+sizeof(struct ether_header));
+
+    memset(&if_ip,0,sizeof(struct ifreq));
+
+    if((sockfd=socket(PF_PACKET,SOCK_RAW,htons(ETHER_TYPE)))==-1) 
+	print_error("Socket error. Exit.",1);	
+
+    strncpy(ifopts.ifr_name,ifName,IFNAMSIZ-1);
+    ioctl(sockfd,SIOCGIFFLAGS,&ifopts);
+    ifopts.ifr_flags|=IFF_PROMISC;
+    ioctl(sockfd,SIOCSIFFLAGS,&ifopts);
+    if(setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&sockopt,sizeof sockopt)==-1)
+	print_error("Setsockopt error. Exit.",1);
+
+    if(setsockopt(sockfd,SOL_SOCKET,SO_BINDTODEVICE,ifName,IFNAMSIZ-1)==-1)
+	    print_error("Setsockopt error. Exit.",1);
+
+    numbytes=recvfrom(sockfd,buf,BUF_SIZ,0,NULL,NULL);
+    printf("listener: got packet %lu bytes\n",numbytes);
     char buffer[100];
-    int socket_udp,len;
-    struct sockaddr_in servaddr,cliaddr;
-    bzero(&servaddr,sizeof(servaddr));
-
-    socket_udp=socket(AF_INET,SOCK_DGRAM,0);        
-    if(socket_udp<0)
-    	print_error("Socket error. Exit.",1);
-    servaddr.sin_addr.s_addr=htonl(INADDR_ANY);
-    servaddr.sin_port=htons(SERV_PORT);
-    servaddr.sin_family=AF_INET; 
-
-    if(bind(socket_udp,(struct sockaddr*)&servaddr,sizeof(servaddr))<0)
-	print_error("Bind error. Exit.",1);
-    int length=sizeof(servaddr);
-
-    len=sizeof(cliaddr);
-    // Получение сообщения
-    int n=recvfrom(socket_udp,buffer,sizeof(buffer),0,(struct sockaddr*)&cliaddr,0);
-    buffer[n]='\0';
+    memcpy(buffer,buf+42,6);
     printf("Recv (echo-serv): %s\n",buffer);
     // Изменение полученной строки
     strcat(buffer,", world!");
-    close(socket_udp);
+    close(sockfd);
     
     struct sockaddr_in addr;
     bzero(&addr,sizeof(addr));

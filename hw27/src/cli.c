@@ -19,9 +19,9 @@
 #define MY_DEST_MAC4 0x00
 #define MY_DEST_MAC5 0x00
 
-#define DEFAULT_IF "enp5s0"
-#define SERV_PORT 3613
-#define SERV_PORT2 3614
+#define DEFAULT_IF "lo"
+#define SERV_PORT 3601
+#define SERV_PORT2 3610
 
 void print_error(char *error_msg,int exit_status)
 {
@@ -149,6 +149,7 @@ int main(int argc, char *argv[])
     // Отправка сообщения
     if(sendto(sock,buf,len,0,(struct sockaddr*)&addr,len_ll)<0)
 	print_error("Send error. Exit.",1);
+    printf("Send: hello\n");
     close(sock);
     
     // Приём сообщения от эхо сервера
